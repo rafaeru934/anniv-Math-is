@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mathéis Land</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1e3a8a, #3b82f6); margin:0; padding:0; color:#fff; }
+    header { background: rgba(0,0,0,0.5); padding: 2rem; text-align:center; }
+    h1 { margin:0; font-size:2.8rem; }
+    .container { max-width:1100px; margin:20px auto; padding:20px; }
+    .section { background:rgba(255,255,255,0.1); margin:20px; padding:25px; border-radius:20px; backdrop-filter: blur(12px); }
+    
+    #chatContainer { height:420px; overflow-y:auto; padding:15px; background:rgba(0,0,0,0.3); border-radius:16px; margin-bottom:15px; }
+    .message { margin:12px 0; padding:14px 18px; border-radius:18px; max-width:85%; line-height:1.6; }
+    .user { background:#22d3ee; color:#111; margin-left:auto; }
+    .ai { background:rgba(255,255,255,0.15); }
+    
+    input { width:65%; padding:16px; border-radius:50px; border:none; background:rgba(255,255,255,0.95); color:#111; }
+    button { padding:16px 24px; margin:5px; background:#22d3ee; color:#111; border:none; border-radius:50px; font-weight:bold; cursor:pointer; }
+    button:hover { background:#67e8f9; }
+
+    .game { display: none; }
+    .active { display: block; }
+    .memory-grid { display: grid; grid-template-columns: repeat(4, 85px); gap: 12px; justify-content: center; margin: 20px auto; }
+    .card { width: 85px; height: 85px; background: #1e40af; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 2.6rem; cursor: pointer; transition: all 0.6s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .card.flipped { transform: rotateY(180deg); }
+    .card.matched { background: #22d3ee; color: #111; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Mathéis Land — 14 ans</h1>
+  </header>
+
+  <div class="container">
+    <!-- Chat Groq -->
+    <div class="section">
+      <h2>🤖 Grokito (Groq)</h2>
+      <div id="chatContainer"></div>
+      <input type="text" id="userInput" placeholder="Pose ta question ou demande une histoire...">
+      <button onclick="sendMessage()">Envoyer</button>
+      <button onclick="continueStory()">Continuer</button>
+      <button onclick="clearChat()" style="background:#ef4444;">Effacer</button>
+    </div>
+
+    <!-- Jeux -->
+    <div class="section">
+      <h2>🎮 Zone Jeux</h2>
+      <button onclick="showGame(1)">Pierre Feuille Ciseaux</button>
+      <button onclick="showGame(2)">Memory</button>
+      <button onclick="showGame(3)">Quiz</button>
+    </div>
+
+    <!-- Jeu 1 -->
+    <div id="game1" class="game section">
+      <h3>✊ Pierre Feuille Ciseaux</h3>
+      <button onclick="playRPS('pierre')">🪨 Pierre</button>
+      <button onclick="playRPS('feuille')">📄 Feuille</button>
+      <button onclick="playRPS('ciseaux')">✂️ Ciseaux</button>
+      <p id="rpsResult" style="margin-top:20px; font-size:1.3rem;"></p>
+    </div>
+
+    <!-- Jeu 2 Memory -->
+    <div id="game2" class="game section">
+      <h3>🧠 Memory</h3>
+      <div id="memoryGrid" class="memory-grid"></div>
+      <button onclick="resetMemory()">Nouvelle Partie</button>
+      <p id="memoryStatus"></p>
+    </div>
+
+    <!-- Jeu 3 Quiz -->
+    <div id="game3" class="game section">
+      <h3>❓ Quiz</h3>
+      <p id="quizQuestion" style="font-size:1.4rem;"></p>
+      <div id="quizOptions"></div>
+      <p id="quizResult" style="margin-top:15px;"></p>
+    </div>
+  </div>
+
+  <script>
+    const GROQ_API_KEY = "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"; // ← REMPLACE PAR TA CLÉ
+
+    let messages = JSON.parse(localStorage.getItem('chatHistory')) || [];
+
+    function addMessage(role, content) {
+      messages.push({ role, content });
+      localStorage.setItem('chatHistory', JSON.stringify(messages));
+      const chat = document.getElementById('chatContainer');
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.innerHTML = `<strong>${role === 'user' ? 'Toi' : 'Grokito'} :</strong> ${content.replace(/\n/g, '<br>')}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function sendMessage(isContinue = false) {
+      const input = document.getElementById('userInput');
+      const text = isContinue ? "Continue s'il te plaît" : input.value.trim();
+      if (!text && !isContinue) return;
+
+      if (!isContinue) {
+        addMessage('user', text);
+        input.value = '';
+      }
+
+      const thinking = document.createElement('div');
+      thinking.id = 'thinking';
+      thinking.className = 'message ai';
+      thinking.textContent = 'Grokito réfléchit...';
+      document.getElementById('chatContainer').appendChild(thinking);
+
+      try {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "system", content: "Tu es Grokito, assistant cool pour un ado de 14 ans." }, ...messages],
+            temperature: 0.85,
+            max_tokens: 4000
+          })
+        });
+
+        const data = await res.json();
+        document.getElementById('thinking').remove();
+        addMessage('assistant', data.choices[0].message.content);
+      } catch (e) {
+        document.getElementById('thinking').remove();
+        addMessage('assistant', "Erreur... Vérifie ta clé API.");
+      }
+    }
+
+    function continueStory() { sendMessage(true); }
+
+    function clearChat() {
+      if (confirm("Tout effacer ?")) {
+        messages = [];
+        localStorage.removeItem('chatHistory');
+        document.getElementById('chatContainer').innerHTML = '';
+        addMessage('assistant', "Nouvelle discussion !");
+      }
+    }
+
+    // === JEUX ===
+    function showGame(n) {
+      document.querySelectorAll('.game').forEach(g => g.classList.remove('active'));
+      document.getElementById('game'+n).classList.add('active');
+      if (n === 2) createMemory();
+      if (n === 3) startQuiz();
+    }
+
+    // Pierre Feuille Ciseaux
+    function playRPS(choice) {
+      const options = ['pierre','feuille','ciseaux'];
+      const ia = options[Math.floor(Math.random()*3)];
+      const emojis = {pierre:'🪨', feuille:'📄', ciseaux:'✂️'};
+      let result = choice === ia ? "Égalité !" : 
+        ((choice==='pierre'&&ia==='ciseaux')||(choice==='feuille'&&ia==='pierre')||(choice==='ciseaux'&&ia==='feuille')) ? 
+        "🎉 Tu as gagné !" : "Grokito gagne !";
+      document.getElementById('rpsResult').innerHTML = `Toi: ${emojis[choice]} | IA: ${emojis[ia]}<br><strong>${result}</strong>`;
+    }
+
+    // Memory
+    let cards = [], flipped = [], matched = 0;
+    const emojis = ['🦾','🔥','⚡','🚀','💀','🕹️','🎮','🧠'];
+
+    function createMemory() {
+      const grid = document.getElementById('memoryGrid');
+      grid.innerHTML = '';
+      cards = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
+      matched = 0; flipped = [];
+      cards.forEach((emoji, i) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.emoji = emoji;
+        card.textContent = '?';
+        card.onclick = () => flipCard(card);
+        grid.appendChild(card);
+      });
+    }
+
+    function flipCard(card) {
+      if (flipped.length >= 2 || card.classList.contains('flipped')) return;
+      card.classList.add('flipped');
+      card.textContent = card.dataset.emoji;
+      flipped.push(card);
+      if (flipped.length === 2) setTimeout(checkMatch, 800);
+    }
+
+    function checkMatch() {
+      const [c1, c2] = flipped;
+      if (c1.dataset.emoji === c2.dataset.emoji) {
+        c1.classList.add('matched'); c2.classList.add('matched');
+        matched++;
+        if (matched === emojis.length) document.getElementById('memoryStatus').innerHTML = "🎉 Bravo champion !";
+      } else {
+        c1.classList.remove('flipped'); c2.classList.remove('flipped');
+        c1.textContent = '?'; c2.textContent = '?';
+      }
+      flipped = [];
+    }
+
+    function resetMemory() { createMemory(); }
+
+    // Quiz
+    let qIndex = 0;
+    const questions = [
+      {q: "12 × 13 = ?", opts: ["156", "166", "146"], correct: 0},
+      {q: "Quel est le plus grand océan ?", opts: ["Atlantique", "Pacifique", "Indien"], correct: 1},
+      {q: "Année de sortie de GTA V ?", opts: ["2011", "2013", "2015"], correct: 1}
+    ];
+
+    function startQuiz() {
+      qIndex = 0;
+      askQuestion();
+    }
+
+    function askQuestion() {
+      const q = questions[qIndex];
+      document.getElementById('quizQuestion').textContent = q.q;
+      const div = document.getElementById('quizOptions');
+      div.innerHTML = '';
+      q.opts.forEach((opt,i) => {
+        const btn = document.createElement('button');
+        btn.textContent = opt;
+        btn.onclick = () => answerQuiz(i);
+        div.appendChild(btn);
+      });
+      document.getElementById('quizResult').innerHTML = '';
+    }
+
+    function answerQuiz(choice) {
+      const correct = questions[qIndex].correct;
+      const res = document.getElementById('quizResult');
+      res.textContent = choice === correct ? "✅ Correct !" : "❌ Faux";
+      qIndex++;
+      if (qIndex < questions.length) setTimeout(askQuestion, 1600);
+      else setTimeout(() => alert("🎉 Quiz terminé !"), 1500);
+    }
+
+    // Initialisation
+    document.getElementById('userInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+
+    window.onload = () => {
+      const chat = document.getElementById('chatContainer');
+      chat.innerHTML = '';
+      messages.forEach(m => addMessage(m.role, m.content));
+      if (messages.length === 0) addMessage('assistant', "Salut Mathéis ! Prêt à jouer ou discuter ?");
+    };
+  </script>
+</body>
+</html>
