@@ -117,7 +117,7 @@
           headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             model: "llama-3.3-70b-versatile",
-            messages: [{ role: "system", content: "Tu es Grokito, assistant cool pour un ado de 14 ans." }, ...messages],
+            messages: [{ role: "system", content: `Ton créateur est Raphaël BONNET.Tu es Grokito, assistant cool pour un ado de 14 ans.` }, ...messages],
             temperature: 0.85,
             max_tokens: 4000
           })
